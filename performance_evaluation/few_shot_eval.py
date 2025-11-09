@@ -8,6 +8,7 @@ import numpy as np
 import tqdm
 from few_shot_model.numpy_utils import *
 
+from icecream import ic
 
 def define_runs(
     n_runs: int,
@@ -59,7 +60,7 @@ def get_features_numpy(model, data: np.ndarray, batch_size: int):
         - data(np.ndarray (num_classes,num_batch,height,width,channel)) : numpy array contening the data
         - batch_size : how many image for one forward pass
     """
-    (num_classes, num_img, height, width, channel) = data.shape
+    (num_classes, num_img, height, width, channel) = data.shape #(num_classes, num_img, height, width, channel): (10, 1000, 32, 32, 3)
 
     empty_output = model(
         np.zeros((1, height, width, channel), dtype=data.dtype)
@@ -74,8 +75,9 @@ def get_features_numpy(model, data: np.ndarray, batch_size: int):
             data_sample = data[
                 classe, batch_size * batch_number : batch_size * (batch_number + 1)
             ]
+            #print("input", data_sample)
             output = model(data_sample)
-
+            #print("output", output)
             total_filter[
                 classe, batch_size * batch_number : batch_size * (batch_number + 1)
             ] = output

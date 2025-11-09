@@ -7,6 +7,14 @@ from typing import Union, Sequence
 
 from few_shot_model.numpy_utils import softmax, one_hot, k_small
 
+from icecream import ic
+"""
+def softmax(x: np.ndarray, dim=0):
+
+    # stability trick( cond of exp(x)=x )
+    e_x = np.exp(x - np.max(x))
+    return e_x / np.sum(e_x, axis=dim, keepdims=True)
+"""
 
 def feature_preprocess(features: np.ndarray, mean_base_features: np.ndarray):
     """
@@ -17,8 +25,8 @@ def feature_preprocess(features: np.ndarray, mean_base_features: np.ndarray):
     returns:
         features(np.ndarray) : normalized feature
     """
-    features = features - mean_base_features
-    features = features / np.linalg.norm(features, axis=-1, keepdims=True)
+    features = features - mean_base_features #features.shape: (20, 5, 80), mean_base_features.shape: (20, 1, 80)
+    features = features / np.linalg.norm(features, axis=-1, keepdims=True) #features.shape: (20, 5, 80)
     return features
 
 
@@ -29,10 +37,55 @@ def ncm(shots_mean: np.ndarray, features: np.ndarray):
         - shots_mean array(...,n_class,n_dim) : mean of the saved shots for each classe
         - features array(...,n_dim) : features to classify (leading dims same as previous array)
     """
-    features = np.expand_dims(features, axis=-2)  # broadcastable along class axis
-    distances = np.linalg.norm(shots_mean - features, axis=-1, ord=2)
-    probas = softmax(-20 * distances, dim=-1)
+    
+    features = np.expand_dims(features, axis=-2)  # broadcastable along class axis, #features.shape: (20, 5, 15, 1, 80)
+    distances = np.linalg.norm(shots_mean - features, axis=-1, ord=2) #shots_mean.shape: (20, 1, 1, 5, 80), distances.shape: (20, 5, 15, 5)
+    probas = softmax(-20 * distances, dim=-1) #probas.shape: (20, 5, 15, 5)
     return probas
+
+###行列積による実装例
+def compute_distance_matrix(batch_features: np.ndarray, prototypes: np.ndarray) -> np.ndarray:
+    """
+    バッチ内の各特徴ベクトルと各クラスのプロトタイプ間の2乗距離を計算する。
+    batch_features : shape (N, D)  - N個のサンプル、各サンプルの次元はD
+    prototypes     : shape (C, D)  - Cクラス分のプロトタイプ
+    return         : shape (N, C)  - 各サンプルと各クラス間の2乗距離
+    """
+    # 各サンプルの2乗ノルム (N, 1)
+    X_norm = np.sum(batch_features ** 2, axis=1, keepdims=True)
+    # 各プロトタイプの2乗ノルム (C, 1)
+    P_norm = np.sum(prototypes ** 2, axis=1, keepdims=True)
+    # 内積の計算 (N, C)
+    inner_product = np.dot(batch_features, prototypes.T)
+    # ブロードキャストを利用して2乗距離を計算
+    distances_sq = X_norm + P_norm.T - 2 * inner_product
+    # 数値誤差対策で、負の値を0に
+    distances_sq = np.maximum(distances_sq, 0)
+    return distances_sq
+
+def ncm_batch_predict(batch_features: np.ndarray, prototypes: np.ndarray, temperature: float = 20.0):
+    """
+    バッチ処理でNCM分類を行い、各サンプルのクラス確率と予測クラスを返す。
+    batch_features : shape (N, D)
+    prototypes     : shape (C, D)
+    temperature    : softmaxのスケール（大きくすると判別が鋭くなる）
+    """
+    # 2乗距離を計算（ここでは距離の大小で順位付けできれば、平方根をとる必要はありません）
+    distances_sq = compute_distance_matrix(batch_features, prototypes)
+    # 実際のユークリッド距離が必要な場合は下記のようにsqrtする
+    distances = np.sqrt(distances_sq)
+    
+    # 距離に対してスケールをかけた値の負の値を logits として softmax を計算
+    logits = -temperature * distances
+    # 数値安定化のために各行の最大値を引く
+    logits_stable = logits - np.max(logits, axis=1, keepdims=True)
+    exp_logits = np.exp(logits_stable)
+    probabilities = exp_logits / np.sum(exp_logits, axis=1, keepdims=True)
+    
+    # 各サンプルで最も高い確率のクラスを予測とする
+    predictions = np.argmax(probabilities, axis=1)
+    return predictions, probabilities
+###
 
 
 def knn(
@@ -125,7 +178,11 @@ class FewShotModel:
                 shots = feature_preprocess(shots, np.expand_dims(mean_feature, axis=1))
             shots = np.expand_dims(shots, axis=(1, 2))
             # (_batch,1,1,n_ways,n_features)
+
+            import time
+            #t = time.time()
             probas = ncm(shots, features)
+            #ic(time.time()-t)
 
         elif model_name == "knn":
             number_neighboors = model_arguments["number_neighboors"]
@@ -150,7 +207,7 @@ class FewShotModel:
                 axis=0,
             )
 
-            probas = knn(shots, features, targets, number_neighboors)
+            probas = knn(shots, features, targets, number_neighboors)        
 
         else:
             raise NotImplementedError(f"classifier : {model_name} is not implemented")
@@ -195,7 +252,7 @@ class FewShotModel:
 
         if model_name == "ncm":
             shots = np.stack(
-                [np.mean(shot, axis=0) for shot in shots_list], axis=0
+                [np.mean(shot, axis=0) for shot in shots_list], axis=0 #shot分はここで平均を求めているから[N, 80]となる(N:クラス数)
             )  # sequence -> array
             # shots : (nclass,nfeatures)
             # shots=shots.detach().cpu().numpy()
@@ -272,3 +329,16 @@ class FewShotModel:
 
         classe_prediction = probabilities.argmax()
         return classe_prediction, probabilities
+
+
+import time
+row = [1,2,4,8,16,32,64,128]
+col = [40,80,160,320,640]
+test_num_class = 1
+for i in row:
+    for j in col:
+        test_input = np.random.rand(1, i, j).astype(np.float32)
+        test_shot = np.random.rand(test_num_class, i, j).astype(np.float32)
+        #a = time.time()
+        ncm(test_shot, test_input)
+        #ic(time.time() - a)

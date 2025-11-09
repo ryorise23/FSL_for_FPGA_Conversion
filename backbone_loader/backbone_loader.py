@@ -5,7 +5,6 @@ get the backbone with the specified framework, using argument from
 -> output : numpy img
 """
 
-
 def get_model(model_specs: dict):
     """
     get the model specified in input
@@ -17,6 +16,9 @@ def get_model(model_specs: dict):
         neural network corespounding to parameters
             takes a batch
     """
+
+    if True:
+        print("backbone_loader.py 'get_model'")
 
     if model_specs["type"] == "pytorch":
         from backbone_loader.backbone_loader_pytorch import TorchBatchModelWrapper
@@ -36,6 +38,6 @@ def get_model(model_specs: dict):
         from backbone_loader.backbone_onnx import BackboneOnnxWrapper
 
         return BackboneOnnxWrapper(model_specs["path_onnx"])
-
+    
     else:
         raise UserWarning("model type=" + model_specs["type"] + "is not defined")

@@ -3,6 +3,7 @@ import numpy as np
 import pickle
 from typing import Union
 import os
+import cv2
 
 
 def get_dataset_numpy(
@@ -44,6 +45,7 @@ def get_dataset_numpy(
         (0, number_sample_per_class, dim_img[1], dim_img[2], dim_img[0]), dtype=dtype
     )
 
+    
     for key, group in grouped:
         # key_and_group = {key : list(group)}
 

@@ -18,9 +18,20 @@ resnet12 :
 "brain_resnet12_strided", "brain_resnet12_tiny_strided"
 
 """
+
+#MARK: importを自動で切り替えられるようにする
 import torch
 from backbone_loader.backbone_pytorch.resnet12 import ResNet12
-from backbone_loader.backbone_pytorch.resnet12_brain import ResNet12Brain, ResNet9
+#from backbone_loader.backbone_pytorch.resnet12_brain import ResNet12Brain, ResNet9
+from backbone_loader.backbone_pytorch.resnet12_brain_bit_diff import  ResNet9
+#from backbone_loader.backbone_pytorch.resnet12_brain_notFixed import ResNet12Brain, ResNet9
+#from backbone_loader.backbone_pytorch.resnet12_brain_ConvQuant import ResNet12Brain #Convだけ量子化している場合はこちらを選択
+#from backbone_loader.backbone_pytorch.resnet12_brain_float import ResNet12Brain, ResNet9 #浮動小数点モデル
+
+from brevitas import config
+
+debug = 1
+
 EASY_SPECS = {
     "easy_resnet12_small": {
         "feature_maps": 45,
@@ -62,6 +73,11 @@ BRAIN_RESNET12_SPECS = {
     },
     "brain_resnet12_tiny": {
         "feature_maps": 32,
+        "use_strides": True,
+    },
+        "brain_resnet12_fm16": {
+        "feature_maps": 16,
+        "use_strides": True,
     },
     "brain_resnet12_small_strided": {"feature_maps": 45, "use_strides": True},
     "brain_resnet12_strided": {
@@ -98,10 +114,6 @@ BRAIN_RESNET9_SPECS = {
         "use_strides": True,
     },
 }
-# ------------------ MODEL FROM PYTORCH HUB -----------------------------
-# NOTE :
-# we do not delete the last convolutional layer, wich correspond to classification, and can induce
-# less performance in few-shot / more consumtion.
 
 
 MODEL_LOC = {
@@ -121,10 +133,7 @@ MODEL_LOC = {
     "nvidia_efficientnet_b0": "NVIDIA/DeepLearningExamples:torchhub",
     "nvidia_gpunet": "NVIDIA/DeepLearningExamples:torchhub",
 }
-# github model may require specific version of package (torch for exemple) to work
-# <repo_owner/repo_name[:ref]> with an optional ref (a tag or a branch).
 
-# how to get the pretrained weight (pytorch hub only)
 MODEL_SPECS = {
     "pretrained": {"pretrained": True},
     "random_init": {"pretrained": False},
@@ -144,6 +153,8 @@ MODEL_SPECS = {
 def load_model_weights(
     model, path, device=None, verbose=False, raise_error_incomplete=True
 ):
+    #config.IGNORE_MISSING_KEYS = True
+    #raise_error_incomplete=False
     """
     load the weight given by the path
     if the weight is not correct, raise an errror
@@ -155,10 +166,10 @@ def load_model_weights(
     """
     pretrained_dict = torch.load(path, map_location=device)
     model_dict = model.state_dict()
-    # pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
     new_dict = {}
     for k, weight in pretrained_dict.items():
         if k in model_dict:
+
             if verbose:
                 print(f"loading weight name : {k}", flush=True)
 
@@ -169,9 +180,10 @@ def load_model_weights(
         else:
             if raise_error_incomplete:
                 raise TypeError("the weights does not correspond to the same model")
-            print("weight with name : {k} not loaded (not in model)")
+            print(f"weight with name : {k} not loaded (not in model)")
+
     model_dict.update(new_dict)
-    model.load_state_dict(model_dict)
+    model.load_state_dict(model_dict) 
 
 
 def load_model_pytorch_hub(model_name, model_spec_name, device="cpu"):
@@ -189,7 +201,7 @@ def load_model_pytorch_hub(model_name, model_spec_name, device="cpu"):
     return model
 
 
-def get_model(model_name, model_spec, device="cpu"):
+def get_model(model_name, model_spec, device=None):
     """
     get a model from pytorch_hub or from custom arch, using hardcoded specifications
     model_name : name of the model. Should either be "easy_resnet12_"+(small_cifar/cifar/tiny_cifar) or a key of MODEL_LOC
@@ -199,7 +211,7 @@ def get_model(model_name, model_spec, device="cpu"):
     if model_name.find("easy_resnet12") >= 0:  # if str contains the model
         model = ResNet12(**EASY_SPECS[model_name]).to(device)
         load_model_weights(model, model_spec, device=device)
-    elif model_name.find("brain_resnet12") >= 0:
+    elif model_name.find("brain_resnet12") >= 0: 
         model = ResNet12Brain(**BRAIN_RESNET12_SPECS[model_name]).to(device)
         load_model_weights(model, model_spec, device=device)
     elif model_name.find("brain_resnet9") >= 0:

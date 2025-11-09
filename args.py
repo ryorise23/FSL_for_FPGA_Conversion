@@ -101,7 +101,7 @@ def parse_model_params(parser):
     pytorch_parser.add_argument(
         "--device-pytorch",
         type=str,
-        default="cuda:0",
+        default="cuda:2",
         help="for pytorch only. Device on wich the backbone will be run",
     )
 
@@ -154,6 +154,16 @@ def parse_model_params(parser):
         help="path of the .onnx file. Input image resolution should match the resolution of the model",
     )
 
+    qonnx_parser = framework_submodules.add_parser(
+        "qonnx", help="onnx specific arguments"
+    )
+
+    qonnx_parser.add_argument(
+        "--path-onnx",
+        default="resnet9_strided_16fmaps.onnx",
+        type=str,
+        help="path of the .onnx file. Input image resolution should match the resolution of the model",
+    )
 
 def parse_args_demonstration(parser):
     demonstration_arguments = parser.add_argument_group(
@@ -275,6 +285,12 @@ def process_arguments(args):
         }
 
     elif args.framework_backbone == "onnx":
+        args.backbone_specs = {
+            "type": args.framework_backbone,
+            "path_onnx": args.path_onnx,
+        }
+
+    elif args.framework_backbone == "qonnx":
         args.backbone_specs = {
             "type": args.framework_backbone,
             "path_onnx": args.path_onnx,

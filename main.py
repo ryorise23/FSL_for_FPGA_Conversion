@@ -250,6 +250,7 @@ def launch_demo(args):
                 # if shot acquisition : stop inference and add image
                 # once the key is pressed, the 10 following frames will be saved as snapshot
                 # only the first one will be saved for display
+                
                 if (
                     (key in possible_input or doing_registration)
                     and clock_main > number_frame_init
